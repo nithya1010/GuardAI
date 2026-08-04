@@ -1,0 +1,10 @@
+{
+  "description": "Transform your data center management with an AI-powered platform that offers real-time monitoring, predictive insights, and a futuristic interactive experience.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
