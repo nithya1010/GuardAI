@@ -124,6 +124,7 @@ export default function DigitalTwin({ standalone = false }: { standalone?: boole
   const [topology, setTopology] = useState<GuardAITopology | null>(null)
   const [hoveredServer, setHoveredServer] = useState<Server | null>(null)
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 })
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 })
   const [tick, setTick] = useState(0)
   const [scanY, setScanY] = useState(0)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -158,6 +159,24 @@ export default function DigitalTwin({ standalone = false }: { standalone?: boole
     }
   }, [])
 
+  useEffect(() => {
+    const measure = () => {
+      const rect = containerRef.current?.getBoundingClientRect()
+      if (rect) {
+        setContainerSize({ width: rect.width, height: rect.height })
+      }
+    }
+
+    measure()
+
+    const observer = new ResizeObserver(measure)
+    if (containerRef.current) {
+      observer.observe(containerRef.current)
+    }
+
+    return () => observer.disconnect()
+  }, [standalone])
+
   const servers = topology?.nodes ?? defaultServers
   const connections = topology?.connections.map(connection => [connection.source, connection.target] as [string, string]) ?? defaultConnections
   const serverMap = Object.fromEntries(servers.map(s => [s.id, s]))
@@ -166,6 +185,9 @@ export default function DigitalTwin({ standalone = false }: { standalone?: boole
 
   const height = standalone ? 500 : 380
   const width = 760
+  const scale = containerSize.width > 0 && containerSize.height > 0
+    ? Math.min(containerSize.width / width, containerSize.height / height)
+    : 1
 
   return (
     <div ref={containerRef} style={{
@@ -176,185 +198,195 @@ export default function DigitalTwin({ standalone = false }: { standalone?: boole
       height,
       width: '100%',
     }}>
-      {/* Grid */}
       <div style={{
-        position: 'absolute', inset: 0,
-        backgroundImage: 'linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px)',
-        backgroundSize: '40px 40px',
-        borderRadius: 20,
-      }} />
-
-      {/* Scan line */}
-      <div style={{
-        position: 'absolute', left: 0, right: 0, height: 2,
-        top: `${scanY}%`,
-        background: 'linear-gradient(90deg, transparent, rgba(34,211,238,0.15), rgba(59,130,246,0.3), rgba(34,211,238,0.15), transparent)',
-        pointerEvents: 'none',
-        zIndex: 5,
-      }} />
-
-      {/* Legend */}
-      <div style={{
-        position: 'absolute', top: 16, left: 16, zIndex: 10,
-        display: 'flex', gap: 12,
+        position: 'absolute',
+        left: '50%',
+        top: '50%',
+        width,
+        height,
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: 'center center',
       }}>
-        {([['healthy', '#10B981', 'Healthy'], ['warning', '#F59E0B', 'Warning'], ['critical', '#EF4444', 'Critical']] as const).map(([s, c, l]) => (
-          <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}` }} />
-            <span style={{ fontSize: 10, color: '#475569', fontWeight: 500 }}>{l}</span>
-          </div>
+        {/* Grid */}
+        <div style={{
+          position: 'absolute', inset: 0,
+          backgroundImage: 'linear-gradient(rgba(59,130,246,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(59,130,246,0.04) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+          borderRadius: 20,
+        }} />
+
+        {/* Scan line */}
+        <div style={{
+          position: 'absolute', left: 0, right: 0, height: 2,
+          top: `${scanY}%`,
+          background: 'linear-gradient(90deg, transparent, rgba(34,211,238,0.15), rgba(59,130,246,0.3), rgba(34,211,238,0.15), transparent)',
+          pointerEvents: 'none',
+          zIndex: 5,
+        }} />
+
+        {/* Legend */}
+        <div style={{
+          position: 'absolute', top: 16, left: 16, zIndex: 10,
+          display: 'flex', gap: 12,
+        }}>
+          {([['healthy', '#10B981', 'Healthy'], ['warning', '#F59E0B', 'Warning'], ['critical', '#EF4444', 'Critical']] as const).map(([s, c, l]) => (
+            <div key={s} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, boxShadow: `0 0 6px ${c}` }} />
+              <span style={{ fontSize: 10, color: '#475569', fontWeight: 500 }}>{l}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Cluster labels */}
+        {[
+          { label: 'WEB CLUSTER', x: 80, y: 48, color: '#60A5FA' },
+          { label: 'DATABASE', x: 310, y: 48, color: '#C084FC' },
+          { label: 'AI/ML COMPUTE', x: 538, y: 48, color: '#F59E0B' },
+          { label: 'CACHE', x: 222, y: 165, color: '#22D3EE' },
+          { label: 'STORAGE', x: 168, y: 258, color: '#94A3B8' },
+        ].map(cl => (
+          <div key={cl.label} style={{
+            position: 'absolute', left: cl.x, top: cl.y,
+            fontSize: 9, color: cl.color, letterSpacing: '0.12em', fontWeight: 700,
+            opacity: 0.6,
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>{cl.label}</div>
         ))}
-      </div>
 
-      {/* Cluster labels */}
-      {[
-        { label: 'WEB CLUSTER', x: 80, y: 48, color: '#60A5FA' },
-        { label: 'DATABASE', x: 310, y: 48, color: '#C084FC' },
-        { label: 'AI/ML COMPUTE', x: 538, y: 48, color: '#F59E0B' },
-        { label: 'CACHE', x: 222, y: 165, color: '#22D3EE' },
-        { label: 'STORAGE', x: 168, y: 258, color: '#94A3B8' },
-      ].map(cl => (
-        <div key={cl.label} style={{
-          position: 'absolute', left: cl.x, top: cl.y,
-          fontSize: 9, color: cl.color, letterSpacing: '0.12em', fontWeight: 700,
-          opacity: 0.6,
-          fontFamily: "'JetBrains Mono', monospace",
-        }}>{cl.label}</div>
-      ))}
+        {/* SVG connections */}
+        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
+          viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="edgeGradBlue" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="#22D3EE" stopOpacity="0.5" />
+            </linearGradient>
+            <linearGradient id="edgeGradWarn" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.6" />
+              <stop offset="100%" stopColor="#EF4444" stopOpacity="0.4" />
+            </linearGradient>
+            <filter id="glow-filter">
+              <feGaussianBlur stdDeviation="2" result="coloredBlur" />
+              <feMerge>
+                <feMergeNode in="coloredBlur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
 
-      {/* SVG connections */}
-      <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible' }}
-        viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
-        <defs>
-          <linearGradient id="edgeGradBlue" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#22D3EE" stopOpacity="0.5" />
-          </linearGradient>
-          <linearGradient id="edgeGradWarn" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.6" />
-            <stop offset="100%" stopColor="#EF4444" stopOpacity="0.4" />
-          </linearGradient>
-          <filter id="glow-filter">
-            <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-            <feMerge>
-              <feMergeNode in="coloredBlur" />
-              <feMergeNode in="SourceGraphic" />
-            </feMerge>
-          </filter>
-        </defs>
+          {connections.map(([aId, bId], i) => {
+            const a = serverMap[aId], b = serverMap[bId]
+            if (!a || !b) return null
+            const isCritical = a.status === 'critical' || b.status === 'critical'
+            const isWarning = a.status === 'warning' || b.status === 'warning'
+            const len = Math.hypot(b.x - a.x, b.y - a.y)
+            const offset = getFlowOffset(i)
+            const gradId = isCritical ? 'edgeGradWarn' : 'edgeGradBlue'
+            const strokeC = isCritical ? 'rgba(239,68,68,0.5)' : isWarning ? 'rgba(245,158,11,0.4)' : 'rgba(59,130,246,0.25)'
 
-        {connections.map(([aId, bId], i) => {
-          const a = serverMap[aId], b = serverMap[bId]
-          if (!a || !b) return null
-          const isCritical = a.status === 'critical' || b.status === 'critical'
-          const isWarning = a.status === 'warning' || b.status === 'warning'
-          const len = Math.hypot(b.x - a.x, b.y - a.y)
-          const offset = getFlowOffset(i)
-          const gradId = isCritical ? 'edgeGradWarn' : 'edgeGradBlue'
-          const strokeC = isCritical ? 'rgba(239,68,68,0.5)' : isWarning ? 'rgba(245,158,11,0.4)' : 'rgba(59,130,246,0.25)'
+            return (
+              <g key={`${aId}-${bId}`}>
+                {/* Static edge */}
+                <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  stroke={strokeC} strokeWidth={isCritical ? 1.5 : 1}
+                  strokeDasharray={isCritical ? '4,3' : undefined}
+                />
+                {/* Animated data packet */}
+                <circle r={isCritical ? 3 : 2}
+                  fill={isCritical ? '#EF4444' : isWarning ? '#F59E0B' : '#22D3EE'}
+                  style={{ filter: `drop-shadow(0 0 ${isCritical ? 4 : 3}px ${isCritical ? '#EF4444' : isWarning ? '#F59E0B' : '#22D3EE'})` }}
+                >
+                  <animateMotion dur={`${1.5 + i * 0.3}s`} repeatCount="indefinite" path={`M${a.x},${a.y} L${b.x},${b.y}`} />
+                </circle>
+                {/* Second packet on some edges */}
+                {i % 2 === 0 && (
+                  <circle r={1.5} fill="rgba(168,85,247,0.8)">
+                    <animateMotion dur={`${2 + i * 0.2}s`} begin={`${(1 + i * 0.15)}s`} repeatCount="indefinite"
+                      path={`M${b.x},${b.y} L${a.x},${a.y}`} />
+                  </circle>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* Server nodes */}
+        {servers.map(server => {
+          const color = statusColors[server.status]
+          const isHovered = hoveredServer?.id === server.id
+          const pulse = Math.sin(tick * 0.15 + server.x * 0.02) * 0.5 + 0.5
+          const size = isHovered ? 20 : 16
 
           return (
-            <g key={`${aId}-${bId}`}>
-              {/* Static edge */}
-              <line x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                stroke={strokeC} strokeWidth={isCritical ? 1.5 : 1}
-                strokeDasharray={isCritical ? '4,3' : undefined}
-              />
-              {/* Animated data packet */}
-              <circle r={isCritical ? 3 : 2}
-                fill={isCritical ? '#EF4444' : isWarning ? '#F59E0B' : '#22D3EE'}
-                style={{ filter: `drop-shadow(0 0 ${isCritical ? 4 : 3}px ${isCritical ? '#EF4444' : isWarning ? '#F59E0B' : '#22D3EE'})` }}
-              >
-                <animateMotion dur={`${1.5 + i * 0.3}s`} repeatCount="indefinite" path={`M${a.x},${a.y} L${b.x},${b.y}`} />
-              </circle>
-              {/* Second packet on some edges */}
-              {i % 2 === 0 && (
-                <circle r={1.5} fill="rgba(168,85,247,0.8)">
-                  <animateMotion dur={`${2 + i * 0.2}s`} begin={`${(1 + i * 0.15)}s`} repeatCount="indefinite"
-                    path={`M${b.x},${b.y} L${a.x},${a.y}`} />
-                </circle>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-
-      {/* Server nodes */}
-      {servers.map(server => {
-        const color = statusColors[server.status]
-        const isHovered = hoveredServer?.id === server.id
-        const pulse = Math.sin(tick * 0.15 + server.x * 0.02) * 0.5 + 0.5
-        const size = isHovered ? 20 : 16
-
-        return (
-          <div
-            key={server.id}
-            onMouseEnter={e => {
-              setHoveredServer(server)
-              const rect = containerRef.current?.getBoundingClientRect()
-              if (rect) {
-                setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-              }
-            }}
-            onMouseMove={e => {
-              const rect = containerRef.current?.getBoundingClientRect()
-              if (rect) {
-                setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
-              }
-            }}
-            onMouseLeave={() => setHoveredServer(null)}
-            style={{
-              position: 'absolute',
-              left: server.x - size / 2,
-              top: server.y - size / 2,
-              width: size, height: size,
-              cursor: 'pointer',
-              zIndex: 10,
-              transition: 'width 0.2s, height 0.2s, left 0.2s, top 0.2s',
-            }}
-          >
-            {/* Outer glow ring */}
-            <div style={{
-              position: 'absolute',
-              inset: -8,
-              borderRadius: '50%',
-              border: `1px solid ${color}`,
-              opacity: pulse * (isHovered ? 0.8 : 0.3),
-              transition: 'opacity 0.1s',
-            }} />
-            {/* Pulse ripple for critical */}
-            {server.status === 'critical' && (
+            <div
+              key={server.id}
+              onMouseEnter={e => {
+                setHoveredServer(server)
+                const rect = containerRef.current?.getBoundingClientRect()
+                if (rect) {
+                  setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+                }
+              }}
+              onMouseMove={e => {
+                const rect = containerRef.current?.getBoundingClientRect()
+                if (rect) {
+                  setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top })
+                }
+              }}
+              onMouseLeave={() => setHoveredServer(null)}
+              style={{
+                position: 'absolute',
+                left: server.x - size / 2,
+                top: server.y - size / 2,
+                width: size, height: size,
+                cursor: 'pointer',
+                zIndex: 10,
+                transition: 'width 0.2s, height 0.2s, left 0.2s, top 0.2s',
+              }}
+            >
+              {/* Outer glow ring */}
               <div style={{
                 position: 'absolute',
-                inset: -12,
+                inset: -8,
                 borderRadius: '50%',
-                border: '1px solid rgba(239,68,68,0.4)',
-                animation: 'ripple 1.5s ease-out infinite',
+                border: `1px solid ${color}`,
+                opacity: pulse * (isHovered ? 0.8 : 0.3),
+                transition: 'opacity 0.1s',
               }} />
-            )}
-            {/* Main dot */}
-            <div style={{
-              width: '100%', height: '100%',
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${color} 0%, ${color}88 60%, ${color}33 100%)`,
-              border: `2px solid ${color}`,
-              boxShadow: isHovered
-                ? `0 0 20px ${color}, 0 0 40px ${color}66, inset 0 0 10px ${color}44`
-                : `0 0 ${8 + pulse * 6}px ${color}, inset 0 0 6px ${color}33`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'box-shadow 0.2s',
-            }}>
-              {/* Inner core */}
+              {/* Pulse ripple for critical */}
+              {server.status === 'critical' && (
+                <div style={{
+                  position: 'absolute',
+                  inset: -12,
+                  borderRadius: '50%',
+                  border: '1px solid rgba(239,68,68,0.4)',
+                  animation: 'ripple 1.5s ease-out infinite',
+                }} />
+              )}
+              {/* Main dot */}
               <div style={{
-                width: '40%', height: '40%',
+                width: '100%', height: '100%',
                 borderRadius: '50%',
-                background: 'white',
-                opacity: 0.8,
-              }} />
+                background: `radial-gradient(circle, ${color} 0%, ${color}88 60%, ${color}33 100%)`,
+                border: `2px solid ${color}`,
+                boxShadow: isHovered
+                  ? `0 0 20px ${color}, 0 0 40px ${color}66, inset 0 0 10px ${color}44`
+                  : `0 0 ${8 + pulse * 6}px ${color}, inset 0 0 6px ${color}33`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                transition: 'box-shadow 0.2s',
+              }}>
+                {/* Inner core */}
+                <div style={{
+                  width: '40%', height: '40%',
+                  borderRadius: '50%',
+                  background: 'white',
+                  opacity: 0.8,
+                }} />
+              </div>
             </div>
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
 
       {/* Tooltip */}
       {hoveredServer && (
