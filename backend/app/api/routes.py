@@ -1,9 +1,9 @@
 """HTTP routes for the GuardAI backend."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.infrastructure import ExportResponse, PatchResponse, ReportResponse, ScanResponse, TopologyResponse
-from app.services.infrastructure import deploy_patch, export_view, generate_report, get_topology, run_scan
+from app.schemas.infrastructure import ExportResponse, PatchResponse, ReportResponse, ScanResponse, ServerCreate, ServerDeleteResponse, ServerDiagnosisResponse, ServerLogsResponse, ServerSSHResponse, ServerSummary, TopologyResponse
+from app.services.infrastructure import add_server, delete_server, deploy_patch, diagnose_server, export_view, generate_report, get_server_logs, get_ssh_connection, get_topology, list_servers, run_scan
 
 
 router = APIRouter()
@@ -53,3 +53,61 @@ async def read_export_view() -> ExportResponse:
     """Return the current digital twin export payload."""
 
     return export_view()
+
+
+@router.get("/servers", response_model=list[ServerSummary], tags=["servers"])
+async def read_servers(
+    cluster: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    query: str | None = Query(default=None),
+) -> list[ServerSummary]:
+    """Return the fleet inventory with optional filters."""
+
+    return list_servers(cluster=cluster, status=status, query=query)
+
+
+@router.post("/servers", response_model=ServerSummary, tags=["servers"])
+async def create_server(payload: ServerCreate) -> ServerSummary:
+    """Create a new server in the in-memory fleet."""
+
+    return add_server(payload)
+
+
+@router.get("/servers/{server_id}/logs", response_model=ServerLogsResponse, tags=["servers"])
+async def read_server_logs(server_id: str) -> ServerLogsResponse:
+    """Return deterministic logs for a server."""
+
+    try:
+        return get_server_logs(server_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/servers/{server_id}/ssh", response_model=ServerSSHResponse, tags=["servers"])
+async def connect_to_server(server_id: str) -> ServerSSHResponse:
+    """Return deterministic SSH connection details."""
+
+    try:
+        return get_ssh_connection(server_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/servers/{server_id}/diagnose", response_model=ServerDiagnosisResponse, tags=["servers"])
+async def diagnose_selected_server(server_id: str) -> ServerDiagnosisResponse:
+    """Return deterministic diagnosis results for a server."""
+
+    try:
+        return diagnose_server(server_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.delete("/servers/{server_id}", response_model=ServerDeleteResponse, tags=["servers"])
+async def remove_server(server_id: str) -> ServerDeleteResponse:
+    """Remove a server from the in-memory fleet."""
+
+    try:
+        return delete_server(server_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc

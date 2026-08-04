@@ -1,22 +1,5 @@
-import { useState } from 'react'
-
-const servers = [
-  { id: 'WEB-PROD-01', cluster: 'Web', status: 'healthy', cpu: 23, ram: 41, disk: 67, temp: 52, power: 340, risk: 8, uptime: '99.99%', location: 'US-East-1a', ip: '10.0.1.11', ai: 'Operating within optimal parameters. No action required.' },
-  { id: 'WEB-PROD-02', cluster: 'Web', status: 'healthy', cpu: 31, ram: 58, disk: 43, temp: 56, power: 370, risk: 12, uptime: '99.97%', location: 'US-East-1b', ip: '10.0.1.12', ai: 'Minor RAM growth trend. Monitor over next 24h period.' },
-  { id: 'WEB-PROD-03', cluster: 'Web', status: 'healthy', cpu: 19, ram: 37, disk: 55, temp: 49, power: 320, risk: 6, uptime: '100%', location: 'US-East-1c', ip: '10.0.1.13', ai: 'Lowest load in cluster. Consider redistributing traffic.' },
-  { id: 'DB-MASTER-01', cluster: 'Database', status: 'warning', cpu: 78, ram: 85, disk: 82, temp: 72, power: 460, risk: 67, uptime: '99.89%', location: 'US-East-1a', ip: '10.0.2.10', ai: 'High memory pressure detected. Recommend query optimization and connection pool review immediately.' },
-  { id: 'DB-REPLICA-01', cluster: 'Database', status: 'healthy', cpu: 34, ram: 61, disk: 71, temp: 58, power: 390, risk: 21, uptime: '99.95%', location: 'US-East-1b', ip: '10.0.2.11', ai: 'Replication lag within acceptable tolerance. Normal operations.' },
-  { id: 'DB-REPLICA-02', cluster: 'Database', status: 'warning', cpu: 62, ram: 74, disk: 79, temp: 68, power: 430, risk: 55, uptime: '99.91%', location: 'US-East-1c', ip: '10.0.2.12', ai: 'I/O wait times elevated. SSD health verification recommended within 24h.' },
-  { id: 'GPU-NODE-01', cluster: 'AI/ML', status: 'critical', cpu: 96, ram: 92, disk: 94, temp: 88, power: 820, risk: 91, uptime: '98.12%', location: 'US-West-2a', ip: '10.0.3.10', ai: '🚨 CRITICAL: Thermal throttling imminent. Immediate cooling intervention required. Risk of hardware failure.' },
-  { id: 'GPU-NODE-02', cluster: 'AI/ML', status: 'warning', cpu: 81, ram: 79, disk: 68, temp: 76, power: 740, risk: 63, uptime: '99.41%', location: 'US-West-2b', ip: '10.0.3.11', ai: 'GPU utilization critically high. Queue saturation expected within 2h at current trajectory.' },
-  { id: 'GPU-NODE-03', cluster: 'AI/ML', status: 'healthy', cpu: 45, ram: 53, disk: 42, temp: 61, power: 560, risk: 28, uptime: '99.82%', location: 'US-West-2c', ip: '10.0.3.12', ai: 'Optimal state. Available capacity for additional AI workloads.' },
-  { id: 'CACHE-REDIS-01', cluster: 'Cache', status: 'healthy', cpu: 15, ram: 88, disk: 12, temp: 44, power: 180, risk: 15, uptime: '100%', location: 'US-East-1a', ip: '10.0.4.10', ai: 'High memory is expected for cache workload. Hit ratio at 98.3% — excellent.' },
-  { id: 'CACHE-REDIS-02', cluster: 'Cache', status: 'healthy', cpu: 12, ram: 82, disk: 10, temp: 42, power: 170, risk: 11, uptime: '100%', location: 'US-East-1b', ip: '10.0.4.11', ai: 'Normal operations. Standby replication healthy.' },
-  { id: 'STORAGE-01', cluster: 'Storage', status: 'warning', cpu: 44, ram: 55, disk: 91, temp: 63, power: 280, risk: 48, uptime: '99.78%', location: 'US-East-1a', ip: '10.0.5.10', ai: 'Disk at 91% capacity. Add 4TB volume within 72h to prevent service degradation.' },
-  { id: 'STORAGE-02', cluster: 'Storage', status: 'healthy', cpu: 29, ram: 42, disk: 63, temp: 51, power: 260, risk: 19, uptime: '99.96%', location: 'US-East-1c', ip: '10.0.5.11', ai: 'Storage metrics nominal. Capacity planning on schedule.' },
-  { id: 'LOAD-BAL-01', cluster: 'Network', status: 'healthy', cpu: 8, ram: 24, disk: 22, temp: 38, power: 120, risk: 5, uptime: '100%', location: 'US-East-1a', ip: '10.0.6.10', ai: 'Traffic distribution balanced. All upstreams healthy.' },
-  { id: 'LOAD-BAL-02', cluster: 'Network', status: 'healthy', cpu: 11, ram: 28, disk: 25, temp: 40, power: 130, risk: 7, uptime: '100%', location: 'US-West-2a', ip: '10.0.6.11', ai: 'Active-Active configuration operating correctly.' },
-]
+import { useEffect, useState } from 'react'
+import { connectToServer, createServer, deleteServer, diagnoseServer, fetchServerLogs, listServers, type GuardAIServer } from '../lib/guardaiApi'
 
 const clusters = ['All', 'Web', 'Database', 'AI/ML', 'Cache', 'Storage', 'Network']
 const statusColors: Record<string, string> = { healthy: '#10B981', warning: '#F59E0B', critical: '#EF4444' }
@@ -43,13 +26,90 @@ export default function Servers() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [servers, setServers] = useState<GuardAIServer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [showAddForm, setShowAddForm] = useState(false)
+  const [newServer, setNewServer] = useState({ name: '', cluster: 'Web', ip: '', location: 'US-East-1a' })
 
-  const filtered = servers.filter(s => {
-    if (filter !== 'All' && s.cluster !== filter) return false
-    if (statusFilter !== 'All' && s.status !== statusFilter.toLowerCase()) return false
-    if (search && !s.id.toLowerCase().includes(search.toLowerCase())) return false
-    return true
-  })
+  const loadServers = async (nextFilter = filter, nextStatus = statusFilter, nextSearch = search) => {
+    setLoading(true)
+    try {
+      const data = await listServers({ cluster: nextFilter, status: nextStatus, query: nextSearch })
+      setServers(data)
+      setExpanded(current => (current && data.some(server => server.id === current) ? current : data[0]?.id ?? null))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void loadServers()
+  }, [filter, statusFilter])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadServers(filter, statusFilter, search)
+    }, 250)
+
+    return () => window.clearTimeout(timer)
+  }, [search])
+
+  const handleAddServer = async () => {
+    if (!newServer.name.trim() || !newServer.cluster.trim() || !newServer.ip.trim()) {
+      setStatusMessage('Name, cluster, and IP are required to add a server.')
+      return
+    }
+
+    setBusyAction('add')
+    setStatusMessage(null)
+
+    try {
+      const created = await createServer(newServer)
+      setStatusMessage(`Server ${created.id} added successfully.`)
+      setShowAddForm(false)
+      setNewServer({ name: '', cluster: 'Web', ip: '', location: 'US-East-1a' })
+      await loadServers()
+      setExpanded(created.id)
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Failed to add server.')
+    } finally {
+      setBusyAction(null)
+    }
+  }
+
+  const handleServerAction = async (server: GuardAIServer, action: 'ssh' | 'logs' | 'diagnose' | 'remove') => {
+    setBusyAction(`${action}:${server.id}`)
+    setStatusMessage(null)
+
+    try {
+      if (action === 'ssh') {
+        const response = await connectToServer(server.id)
+        setStatusMessage(`${response.connection_string} | ${response.note}`)
+      } else if (action === 'logs') {
+        const response = await fetchServerLogs(server.id)
+        setStatusMessage(response.log_lines.join(' | '))
+      } else if (action === 'remove') {
+        const confirmed = window.confirm(`Remove ${server.id} from the fleet?`)
+        if (!confirmed) {
+          setStatusMessage('Server removal cancelled.')
+          return
+        }
+
+        const response = await deleteServer(server.id)
+        setStatusMessage(`${response.server_id} removed successfully.`)
+        await loadServers()
+      } else {
+        const response = await diagnoseServer(server.id)
+        setStatusMessage(`${response.verdict.toUpperCase()}: ${response.recommendation}`)
+      }
+    } catch (error) {
+      setStatusMessage(error instanceof Error ? error.message : 'Server action failed.')
+    } finally {
+      setBusyAction(null)
+    }
+  }
 
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%' }}>
@@ -65,9 +125,41 @@ export default function Servers() {
           <input className="input-dark" placeholder="Search servers..." value={search}
             onChange={e => setSearch(e.target.value)}
             style={{ width: 200, height: 36, fontSize: 13, borderRadius: 10 }} />
-          <button className="btn-primary" style={{ padding: '8px 16px', fontSize: 13 }}>+ Add Server</button>
+          <button className="btn-primary" onClick={() => setShowAddForm(v => !v)} style={{ padding: '8px 16px', fontSize: 13 }}>+ Add Server</button>
         </div>
       </div>
+
+      {statusMessage && (
+        <div className="glass-card" style={{ marginBottom: 16, padding: '10px 14px', borderLeft: '3px solid #22D3EE', color: '#C4B5FD', fontSize: 12 }}>
+          {statusMessage}
+        </div>
+      )}
+
+      {showAddForm && (
+        <div className="glass-card" style={{ marginBottom: 16, padding: 16, display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+          <div>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>NAME</div>
+            <input className="input-dark" value={newServer.name} onChange={e => setNewServer(v => ({ ...v, name: e.target.value }))} placeholder="NEW-SERVER-01" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>CLUSTER</div>
+            <select className="input-dark" value={newServer.cluster} onChange={e => setNewServer(v => ({ ...v, cluster: e.target.value }))}>
+              {clusters.filter(c => c !== 'All').map(cluster => <option key={cluster} value={cluster}>{cluster}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>IP</div>
+            <input className="input-dark" value={newServer.ip} onChange={e => setNewServer(v => ({ ...v, ip: e.target.value }))} placeholder="10.0.9.10" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, color: '#475569', marginBottom: 4 }}>LOCATION</div>
+            <input className="input-dark" value={newServer.location} onChange={e => setNewServer(v => ({ ...v, location: e.target.value }))} placeholder="US-East-1a" />
+          </div>
+          <button className="btn-primary" disabled={busyAction === 'add'} onClick={() => void handleAddServer()} style={{ height: 36 }}>
+            {busyAction === 'add' ? 'Adding...' : 'Create'}
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -95,7 +187,10 @@ export default function Servers() {
 
       {/* Server cards grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 12 }}>
-        {filtered.map(server => {
+        {loading && (
+          <div className="glass-card" style={{ padding: 16, color: '#94A3B8' }}>Loading server inventory...</div>
+        )}
+        {servers.map(server => {
           const isExpanded = expanded === server.id
           const color = statusColors[server.status]
           return (
@@ -198,9 +293,10 @@ export default function Servers() {
                     <div style={{ fontSize: 11, color: '#C4B5FD', lineHeight: 1.5 }}>{server.ai}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
-                    <button className="btn-secondary" style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>SSH Connect</button>
-                    <button className="btn-secondary" style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>View Logs</button>
-                    <button className="btn-primary" style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>AI Diagnose</button>
+                    <button className="btn-secondary" onClick={e => { e.stopPropagation(); void handleServerAction(server, 'ssh') }} style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>SSH Connect</button>
+                    <button className="btn-secondary" onClick={e => { e.stopPropagation(); void handleServerAction(server, 'logs') }} style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>View Logs</button>
+                    <button className="btn-primary" onClick={e => { e.stopPropagation(); void handleServerAction(server, 'diagnose') }} style={{ flex: 1, padding: '7px 10px', fontSize: 11 }}>AI Diagnose</button>
+                    <button className="btn-secondary" onClick={e => { e.stopPropagation(); void handleServerAction(server, 'remove') }} style={{ padding: '7px 10px', fontSize: 11, color: '#FCA5A5' }}>Remove</button>
                   </div>
                 </div>
               )}

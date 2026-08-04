@@ -89,3 +89,63 @@ class ExportResponse(ActionMessage):
     file_name: str
     content_type: str
     payload: dict[str, object]
+
+
+class ServerSummary(BaseModel):
+    """Summary card for a single server in the fleet view."""
+
+    id: str
+    cluster: str
+    status: NodeStatus
+    cpu: int
+    ram: int
+    disk: int
+    temp: int
+    power: int
+    risk: int
+    uptime: str
+    location: str
+    ip: str
+    ai: str
+
+
+class ServerCreate(BaseModel):
+    """Payload for creating a new fleet server."""
+
+    id: str | None = None
+    name: str
+    cluster: str
+    ip: str
+    location: str = "US-East-1a"
+
+
+class ServerLogsResponse(ActionMessage):
+    """Response returned when logs are requested for a server."""
+
+    server_id: str
+    log_lines: list[str]
+
+
+class ServerSSHResponse(ActionMessage):
+    """Response returned when SSH access is requested."""
+
+    server_id: str
+    connection_string: str
+    note: str
+
+
+class ServerDiagnosisResponse(ActionMessage):
+    """Response returned when an AI-style diagnosis is requested."""
+
+    server_id: str
+    verdict: str
+    recommendation: str
+    metrics: dict[str, str]
+
+
+class ServerDeleteResponse(ActionMessage):
+    """Response returned when a server is removed from the fleet."""
+
+    server_id: str
+    removed: bool = True
+
