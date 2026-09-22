@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { updateAlertAction, fetchAlerts, type GuardAIAlertItem } from '../lib/guardaiApi'
 
-const alerts = [
+const initialAlerts: GuardAIAlertItem[] = [
   {
     id: 'INC-0847', severity: 'critical', title: 'GPU-NODE-01 Thermal Critical',
     desc: 'GPU temperature at 88°C, approaching shutdown threshold of 95°C. Thermal throttling active. Cooling Unit 3-B efficiency degraded.',
@@ -75,17 +76,54 @@ const statusConfig: Record<string, { color: string; label: string }> = {
 }
 
 export default function Alerts() {
+  const [alertsList, setAlertsList] = useState<GuardAIAlertItem[]>(initialAlerts)
   const [sevFilter, setSevFilter] = useState('All')
   const [statusFilt, setStatusFilt] = useState('All')
   const [selected, setSelected] = useState<string | null>(null)
+  const [bannerMsg, setBannerMsg] = useState<string | null>(null)
 
-  const filtered = alerts.filter(a => {
+  useEffect(() => {
+    fetchAlerts()
+      .then(fetched => setAlertsList(fetched))
+      .catch(() => {
+        // Fallback to initial local alerts if offline
+      })
+  }, [])
+
+  const handleAction = async (alertId: string, action: 'acknowledge' | 'investigate' | 'autofix') => {
+    const newStatusMap = {
+      acknowledge: 'acknowledged' as const,
+      investigate: 'investigating' as const,
+      autofix: 'resolved' as const,
+    }
+    const targetStatus = newStatusMap[action]
+
+    setAlertsList(prev =>
+      prev.map(a => (a.id === alertId ? { ...a, status: targetStatus } : a))
+    )
+
+    const actionText = action === 'acknowledge' ? 'acknowledged' : action === 'investigate' ? 'marked under investigation' : 'resolved via AI Auto-Fix'
+    setBannerMsg(`Incident ${alertId} ${actionText} successfully.`)
+
+    try {
+      await updateAlertAction(alertId, action)
+    } catch {
+      // Graceful local status preservation
+    }
+  }
+
+  const filtered = alertsList.filter(a => {
     if (sevFilter !== 'All' && a.severity !== sevFilter.toLowerCase()) return false
     if (statusFilt !== 'All' && a.status !== statusFilt.toLowerCase()) return false
     return true
   })
 
-  const counts = { critical: alerts.filter(a => a.severity === 'critical').length, high: alerts.filter(a => a.severity === 'high').length, medium: alerts.filter(a => a.severity === 'medium').length, low: alerts.filter(a => a.severity === 'low').length }
+  const counts = {
+    critical: alertsList.filter(a => a.severity === 'critical').length,
+    high: alertsList.filter(a => a.severity === 'high').length,
+    medium: alertsList.filter(a => a.severity === 'medium').length,
+    low: alertsList.filter(a => a.severity === 'low').length,
+  }
 
   return (
     <div style={{ padding: 24, overflowY: 'auto', height: '100%', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -97,6 +135,12 @@ export default function Alerts() {
         </div>
         <button className="btn-primary" style={{ fontSize: 13, padding: '9px 18px' }}>Create Incident</button>
       </div>
+
+      {bannerMsg && (
+        <div className="glass-card" style={{ padding: '10px 14px', borderLeft: '3px solid #10B981', color: '#6EE7B7', fontSize: 12 }}>
+          ✅ {bannerMsg}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -218,9 +262,27 @@ export default function Alerts() {
                       <div style={{ display: 'flex', gap: 8 }}>
                         {alert.status !== 'resolved' && (
                           <>
-                            <button className="btn-primary" style={{ fontSize: 12, padding: '7px 14px' }}>Acknowledge</button>
-                            <button className="btn-secondary" style={{ fontSize: 12, padding: '7px 14px' }}>Investigate</button>
-                            <button className="btn-secondary" style={{ fontSize: 12, padding: '7px 14px' }}>AI Auto-Fix</button>
+                            <button
+                              className="btn-primary"
+                              onClick={(e) => { e.stopPropagation(); void handleAction(alert.id, 'acknowledge') }}
+                              style={{ fontSize: 12, padding: '7px 14px' }}
+                            >
+                              Acknowledge
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              onClick={(e) => { e.stopPropagation(); void handleAction(alert.id, 'investigate') }}
+                              style={{ fontSize: 12, padding: '7px 14px' }}
+                            >
+                              Investigate
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              onClick={(e) => { e.stopPropagation(); void handleAction(alert.id, 'autofix') }}
+                              style={{ fontSize: 12, padding: '7px 14px' }}
+                            >
+                              AI Auto-Fix
+                            </button>
                           </>
                         )}
                         <button className="btn-ghost" style={{ fontSize: 12, padding: '7px 14px' }}>View Full Details</button>
@@ -236,3 +298,4 @@ export default function Alerts() {
     </div>
   )
 }
+

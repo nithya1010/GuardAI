@@ -11,3 +11,12 @@ logs/
 *.log
 .claude-replay.*
 .tmp-*
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+.pytest_cache/

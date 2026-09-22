@@ -2,8 +2,39 @@
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas.infrastructure import ExportResponse, PatchResponse, ReportResponse, ScanResponse, ServerCreate, ServerDeleteResponse, ServerDiagnosisResponse, ServerLogsResponse, ServerSSHResponse, ServerSummary, TopologyResponse
-from app.services.infrastructure import add_server, delete_server, deploy_patch, diagnose_server, export_view, generate_report, get_server_logs, get_ssh_connection, get_topology, list_servers, run_scan
+from app.schemas.infrastructure import (
+    AlertActionRequest,
+    AlertItem,
+    CopilotQueryRequest,
+    CopilotQueryResponse,
+    ExportResponse,
+    PatchResponse,
+    ReportResponse,
+    ScanResponse,
+    ServerCreate,
+    ServerDeleteResponse,
+    ServerDiagnosisResponse,
+    ServerLogsResponse,
+    ServerSSHResponse,
+    ServerSummary,
+    TopologyResponse,
+)
+from app.services.infrastructure import (
+    add_server,
+    delete_server,
+    deploy_patch,
+    diagnose_server,
+    export_view,
+    generate_report,
+    get_server_logs,
+    get_ssh_connection,
+    get_topology,
+    list_alerts,
+    list_servers,
+    query_copilot,
+    run_scan,
+    update_alert_status,
+)
 
 
 router = APIRouter()
@@ -111,3 +142,58 @@ async def remove_server(server_id: str) -> ServerDeleteResponse:
         return delete_server(server_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/alerts", response_model=list[AlertItem], tags=["alerts"])
+async def read_alerts() -> list[AlertItem]:
+    """Return all active infrastructure alerts and incidents."""
+
+    return list_alerts()
+
+
+@router.post("/alerts/{alert_id}/action", response_model=AlertItem, tags=["alerts"])
+async def action_alert(alert_id: str, payload: AlertActionRequest) -> AlertItem:
+    """Execute action (acknowledge, investigate, autofix) on an alert."""
+
+    try:
+        return update_alert_status(alert_id, payload.action)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/alerts/{alert_id}/acknowledge", response_model=AlertItem, tags=["alerts"])
+async def acknowledge_alert(alert_id: str) -> AlertItem:
+    """Acknowledge an infrastructure alert."""
+
+    try:
+        return update_alert_status(alert_id, "acknowledge")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/alerts/{alert_id}/investigate", response_model=AlertItem, tags=["alerts"])
+async def investigate_alert(alert_id: str) -> AlertItem:
+    """Mark an infrastructure alert as under investigation."""
+
+    try:
+        return update_alert_status(alert_id, "investigate")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/alerts/{alert_id}/autofix", response_model=AlertItem, tags=["alerts"])
+async def autofix_alert(alert_id: str) -> AlertItem:
+    """Execute AI auto-fix and resolve alert."""
+
+    try:
+        return update_alert_status(alert_id, "autofix")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.post("/copilot/query", response_model=CopilotQueryResponse, tags=["copilot"])
+async def process_copilot_query(payload: CopilotQueryRequest) -> CopilotQueryResponse:
+    """Query GuardAI Copilot for dynamic telemetry analysis and recommendations."""
+
+    return query_copilot(payload.prompt)
+

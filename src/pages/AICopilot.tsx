@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { queryCopilotApi } from '../lib/guardaiApi'
 
 interface Message {
   id: string
@@ -48,27 +49,133 @@ GPU-NODE-01 is running ML training job \`llm-finetune-v7\` which has been alloca
     confidence: 96.4,
     type: 'analysis',
   },
+
+  'What is the failure probability for DB-MASTER-01?': {
+    content: `## Predictive Risk Assessment: DB-MASTER-01
+
+**Diagnosis Confidence: 94.2%**
+
+**Failure Probability within 48 Hours: 38.4%**
+
+Telemetry indicators for DB-MASTER-01 show critical stress patterns:
+
+- **Memory Saturation:** RAM utilization at 85% with connection pool at 94/100 active connections.
+- **I/O Latency:** Query execution times elevated by +340ms above normal baseline.
+- **Deadlock Rate:** 12 lock contentions logged in past 60 minutes.
+
+**Recommended Mitigation Strategy:**
+1. Route 40% of read traffic to DB-REPLICA-01 and DB-REPLICA-02.
+2. Increase PostgreSQL connection pool size from 100 to 150.
+3. Execute query index optimization on \`user_telemetry_events\` table.`,
+    confidence: 94.2,
+    type: 'analysis',
+  },
+
+  'Optimize my infrastructure for cost': {
+    content: `## Cost Optimization & Resource Efficiency Report
+
+**Optimization Confidence: 92.8%**
+
+I've identified **$5,040/month** in potential cloud infrastructure savings across your 247 nodes:
+
+1. 💡 **Underutilized Compute:** WEB-PROD-03 is running at only 19% average CPU. Consolidating traffic onto WEB-PROD-01/02 allows decommissioning 1 node ($1,240/mo savings).
+2. ⚡ **Spot Instance Offloading:** Migrate batch ML inference jobs on GPU-NODE-02 to spot GPU instances ($2,600/mo savings).
+3. 📦 **Storage Tiering:** Move 4.2TB of unindexed logs older than 90 days from STORAGE-01 to S3 Glacier ($1,200/mo savings).
+
+**Action Plan:** Auto-apply suggested instance tiering during off-peak window (02:00 UTC).`,
+    confidence: 92.8,
+    type: 'recommendation',
+  },
+
+  'Give me a root cause analysis for the current alerts': {
+    content: `## Comprehensive Root Cause Analysis for Active Alerts
+
+**RCA Confidence: 97.1%**
+
+Here is the triaged root cause breakdown for your active alerts:
+
+- **INC-0847 (GPU-NODE-01 Thermal):** Airflow blockage in Rack Zone C combined with 100% sustained VRAM compute. Remedy: Migrate workload to GPU-NODE-03.
+- **INC-0846 (DB-MASTER-01 Memory):** Unindexed query pattern from analytics cron job causing memory allocation leaks. Remedy: Apply index on query filter.
+- **INC-0845 (STORAGE-01 Capacity):** Automated snapshot generation frequency too high (hourly). Remedy: Retain daily snapshots only.`,
+    confidence: 97.1,
+    type: 'analysis',
+  },
+
+  'Predict capacity needs for next 30 days': {
+    content: `## 30-Day Predictive Capacity Forecast
+
+**Forecast Confidence: 95.5%**
+
+Based on machine learning models trained on 90 days of telemetry data:
+
+- **Storage Growth:** +4.2 GB/day projected. STORAGE-01 will reach 100% capacity in **68 hours**. Immediate expansion (+4TB) required.
+- **GPU Compute:** ML inference volume growing at +14% week-over-week. GPU-NODE-03 will reach saturation by **Aug 22**.
+- **Network Bandwidth:** Peak bandwidth expected to reach **3.1 Gbps** on Aug 15 during scheduled data pipeline sync.`,
+    confidence: 95.5,
+    type: 'analysis',
+  },
+
+  'Which servers should I restart first?': {
+    content: `## Server Restart Prioritization Matrix
+
+**Confidence: 98.1%**
+
+Based on process memory leaks and connection saturation, here is the safe restart order:
+
+1. 🔄 **WEB-PROD-02 (Priority 1):** Node.js heap leak detected (growing +2.3%/hr). Safe for immediate rolling restart after draining connections.
+2. 🔄 **DB-REPLICA-02 (Priority 2):** SSD I/O wait elevated (18ms). Perform failover check first, then restart storage controller service.
+3. ⚠️ **DO NOT RESTART:** DB-MASTER-01 or GPU-NODE-01 until active workloads are migrated.`,
+    confidence: 98.1,
+    type: 'recommendation',
+  },
+
+  'Summarize this week\'s incidents': {
+    content: `## Weekly Infrastructure Incident Summary
+
+**Report Period: Past 7 Days**
+
+- **Total Incidents Logged:** 14 incidents (1 Critical, 4 High, 6 Medium, 3 Low)
+- **Auto-Resolved by GuardAI:** 12 incidents (85.7% automation rate)
+- **Mean Time to Detection (MTTD):** 1.4 seconds
+- **Mean Time to Resolution (MTTR):** 4.2 minutes
+
+**Key Incident Highlights:**
+- \`INC-0847\`: GPU-NODE-01 thermal alert (Active)
+- \`INC-0846\`: DB-MASTER-01 memory pressure (Active)
+- \`INC-0840\`: Network partition between US-East-1a and US-West-2a (Auto-recovered)`,
+    confidence: 97.5,
+    type: 'analysis',
+  },
+
+  'Generate an executive health report': {
+    content: `## Executive Infrastructure Health Summary
+
+**Overall System Health Score: 97.2/100**
+
+- **Fleet Overview:** 247 nodes monitored across 6 clusters.
+- **Uptime SLA:** 99.97% 30-day availability maintained.
+- **Risk Assessment:** LOW (Risk Score: 28).
+- **Cost Savings Realized:** $18,400 saved this month through automated resource optimization and incident prevention.`,
+    confidence: 99.2,
+    type: 'recommendation',
+  },
+
   'default': {
-    content: `I've analyzed your infrastructure based on current telemetry data.
+    content: `I've analyzed your infrastructure telemetry for your request.
 
 **Infrastructure Summary:**
-- 15 total nodes monitored
+- 15 total primary nodes monitored across 6 clusters
 - 10 healthy, 4 in warning state, 1 critical
 - Overall health score: 97.2/100
 - AI risk assessment: LOW (score 28)
 
-**Top Recommendations:**
+**Top System Action Items:**
 1. Address GPU-NODE-01 thermal issue immediately (critical)
 2. Expand STORAGE-01 capacity within 72h
 3. Review DB-MASTER-01 query optimization
 4. Schedule cooling maintenance for Rack Zone C
 
-**Predicted Events (Next 24h):**
-- 89% probability: Storage expansion needed
-- 67% probability: DB connection pool saturation
-- 34% probability: Traffic spike requiring horizontal scaling
-
-Is there a specific aspect of your infrastructure you'd like me to analyze in depth?`,
+Is there a specific server or cluster metric you would like me to analyze in detail?`,
     confidence: 94.7,
     type: 'recommendation',
   },
@@ -97,27 +204,51 @@ How can I help you today? You can ask me anything about your infrastructure, req
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  const sendMessage = (text: string) => {
+  const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return
     const userMsg: Message = { id: Date.now().toString(), role: 'user', content: text, timestamp: new Date() }
     setMessages(m => [...m, userMsg])
     setInput('')
     setLoading(true)
 
-    setTimeout(() => {
-      const resp = aiResponses[text] || aiResponses['default']
+    try {
+      // Query FastAPI backend for copilot response
+      const apiResp = await queryCopilotApi(text)
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: 'ai',
-        content: resp.content,
+        content: apiResp.content,
+        timestamp: new Date(),
+        confidence: apiResp.confidence,
+        type: apiResp.message_type as Message['type'],
+      }
+      setMessages(m => [...m, aiMsg])
+    } catch {
+      // Fallback local dynamic response lookup
+      const resp = aiResponses[text] || aiResponses['default']
+      const fallbackContent = resp.content.includes(text) ? resp.content : (
+        `## Telemetry Analysis for: "${text}"\n\n` +
+        `**AI Neural Engine Confidence: 95.1%**\n\n` +
+        `I've analyzed active metrics across all 247 nodes for your question:\n\n` +
+        `- **Current System Health Score:** 97.2 / 100\n` +
+        `- **Active Alerts:** 1 Critical (GPU-NODE-01), 3 Warnings (DB-MASTER-01, STORAGE-01, DB-REPLICA-02)\n` +
+        `- **Network Throughput:** 2.4 Gbps across backbone connections\n\n` +
+        `Recommended Next Step: Run an automated AI scan or view cluster telemetry in Digital Twin.`
+      )
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'ai',
+        content: fallbackContent,
         timestamp: new Date(),
         confidence: resp.confidence,
         type: resp.type,
       }
       setMessages(m => [...m, aiMsg])
+    } finally {
       setLoading(false)
-    }, 1400 + Math.random() * 600)
+    }
   }
+
 
   const renderMarkdown = (text: string) => {
     return text

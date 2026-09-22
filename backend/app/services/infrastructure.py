@@ -10,7 +10,25 @@ from collections import Counter
 from datetime import UTC, datetime
 import threading
 
-from app.schemas.infrastructure import Connection, ExportResponse, Node, PatchResponse, ReportResponse, ScanResponse, ServerCreate, ServerDeleteResponse, ServerDiagnosisResponse, ServerLogsResponse, ServerSSHResponse, ServerSummary, TopologyResponse
+from app.schemas.infrastructure import (
+    AlertActionRequest,
+    AlertItem,
+    Connection,
+    CopilotQueryRequest,
+    CopilotQueryResponse,
+    ExportResponse,
+    Node,
+    PatchResponse,
+    ReportResponse,
+    ScanResponse,
+    ServerCreate,
+    ServerDeleteResponse,
+    ServerDiagnosisResponse,
+    ServerLogsResponse,
+    ServerSSHResponse,
+    ServerSummary,
+    TopologyResponse,
+)
 
 
 _NODES: list[Node] = [
@@ -277,3 +295,240 @@ def _find_server(server_id: str) -> ServerSummary:
             if server.id.upper() == normalized_id:
                 return server.model_copy()
     raise KeyError(f'Server not found: {server_id}')
+
+
+_ALERTS_LOCK = threading.Lock()
+_ALERTS_STORE: list[AlertItem] = [
+    AlertItem(
+        id='INC-0847', severity='critical', title='GPU-NODE-01 Thermal Critical',
+        desc='GPU temperature at 88°C, approaching shutdown threshold of 95°C. Thermal throttling active. Cooling Unit 3-B efficiency degraded.',
+        server='GPU-NODE-01', time='2 minutes ago', timestamp='14:23:41',
+        status='active', ai='Immediate cooling intervention required. Migrate workloads to GPU-NODE-03.',
+        tags=['thermal', 'hardware', 'gpu'],
+    ),
+    AlertItem(
+        id='INC-0846', severity='high', title='DB-MASTER-01 Memory Pressure',
+        desc='Memory utilization at 85%. Connection pool approaching saturation. Query execution times elevated by 340ms average.',
+        server='DB-MASTER-01', time='14 minutes ago', timestamp='14:11:18',
+        status='active', ai='Query optimization and connection pool tuning recommended. Add read replica to distribute load.',
+        tags=['database', 'memory', 'performance'],
+    ),
+    AlertItem(
+        id='INC-0845', severity='high', title='STORAGE-01 Capacity Warning',
+        desc='Disk utilization reached 91%. At current growth rate, full capacity will be reached in approximately 68 hours.',
+        server='STORAGE-01', time='1 hour ago', timestamp='13:26:05',
+        status='acknowledged', ai='Provision additional 4TB volume. Archive data older than 90 days to cold storage.',
+        tags=['storage', 'capacity'],
+    ),
+    AlertItem(
+        id='INC-0844', severity='medium', title='DB-REPLICA-02 I/O Wait Elevated',
+        desc='Disk I/O wait times are 340% above baseline. SSD write latency elevated to 18ms from normal 4ms.',
+        server='DB-REPLICA-02', time='2 hours ago', timestamp='12:19:33',
+        status='investigating', ai='Run SSD health diagnostics. Consider replacing drive if health score below 80%.',
+        tags=['database', 'disk', 'performance'],
+    ),
+    AlertItem(
+        id='INC-0843', severity='medium', title='GPU-NODE-02 Queue Saturation',
+        desc='ML inference queue depth at 847 requests. Processing rate unable to keep pace. P99 latency at 4.2s.',
+        server='GPU-NODE-02', time='3 hours ago', timestamp='11:44:12',
+        status='active', ai='Scale horizontally or implement request batching. GPU-NODE-03 has 55% available capacity.',
+        tags=['gpu', 'performance', 'queue'],
+    ),
+    AlertItem(
+        id='INC-0842', severity='low', title='WEB-PROD-02 RAM Growth Trend',
+        desc='Memory usage growing at 2.3% per hour. Potential memory leak in Node.js process detected via heap analysis.',
+        server='WEB-PROD-02', time='5 hours ago', timestamp='09:31:08',
+        status='monitoring', ai='Monitor heap allocation. Schedule rolling restart during off-peak hours if trend continues.',
+        tags=['web', 'memory', 'node'],
+    ),
+    AlertItem(
+        id='INC-0841', severity='low', title='SSL Certificate Expiry Warning',
+        desc='TLS certificate for api.guardai.io expires in 21 days. Auto-renewal configured but confirmation pending.',
+        server='LOAD-BAL-01', time='8 hours ago', timestamp='06:18:44',
+        status='resolved', ai='Verify auto-renewal configuration. Manual renewal available as fallback.',
+        tags=['security', 'ssl', 'certificate'],
+    ),
+    AlertItem(
+        id='INC-0840', severity='critical', title='Network Partition Detected',
+        desc='Temporary network partition between US-East-1a and US-West-2a zones. Duration: 23 seconds. Auto-recovered.',
+        server='LOAD-BAL-02', time='12 hours ago', timestamp='02:07:19',
+        status='resolved', ai='Post-incident analysis complete. Route table configuration updated to prevent recurrence.',
+        tags=['network', 'partition', 'resolved'],
+    ),
+]
+
+
+def list_alerts() -> list[AlertItem]:
+    with _ALERTS_LOCK:
+        return [item.model_copy() for item in _ALERTS_STORE]
+
+
+def update_alert_status(alert_id: str, action: str) -> AlertItem:
+    normalized_id = alert_id.strip().upper()
+    status_map = {
+        'acknowledge': 'acknowledged',
+        'investigate': 'investigating',
+        'autofix': 'resolved',
+        'resolve': 'resolved',
+    }
+    new_status = status_map.get(action.lower(), 'acknowledged')
+
+    with _ALERTS_LOCK:
+        for alert in _ALERTS_STORE:
+            if alert.id.upper() == normalized_id:
+                alert.status = new_status
+                return alert.model_copy()
+    raise KeyError(f'Alert not found: {alert_id}')
+
+
+def query_copilot(prompt: str) -> CopilotQueryResponse:
+    lower_prompt = prompt.lower().strip()
+
+    if 'gpu-node-01' in lower_prompt or ('thermal' in lower_prompt and 'gpu' in lower_prompt) or 'hot' in lower_prompt:
+        content = (
+            "## Root Cause Analysis: GPU-NODE-01 Thermal Issue\n\n"
+            "**Diagnosis Confidence: 96.4%**\n\n"
+            "Based on telemetry analysis across the past 6 hours, I've identified the following causal chain:\n\n"
+            "**Primary Cause:**\n"
+            "GPU-NODE-01 is running ML training job `llm-finetune-v7` which has been allocated 100% GPU VRAM (80GB) since 09:14 UTC. "
+            "This workload generates sustained thermal output of ~320W per GPU across 8 GPUs.\n\n"
+            "**Contributing Factors:**\n"
+            "1. 🌡️ Cooling Unit 3-B is operating at 78% efficiency (down from 95% baseline) — filter replacement overdue by 12 days\n"
+            "2. 📊 Ambient temperature in Rack Zone C is 28°C vs target 22°C\n"
+            "3. ⚡ Power delivery to rack is at 97% capacity, reducing cooling headroom\n\n"
+            "**Immediate Actions Required:**\n"
+            "- Migrate `llm-finetune-v7` to GPU-NODE-03 (47% capacity available)\n"
+            "- Replace Cooling Unit 3-B filter (ETA 45 min)\n"
+            "- Throttle GPU clock from 1.95GHz to 1.6GHz temporarily\n\n"
+            "**Predicted Timeline:**\n"
+            "- Without intervention: Thermal shutdown in ~18 minutes\n"
+            "- With throttling only: Stable but 23% performance degradation\n"
+            "- With full remediation: Return to baseline in ~90 minutes"
+        )
+        return CopilotQueryResponse(
+            action="query_copilot",
+            message="Thermal analysis completed.",
+            timestamp=_now(),
+            prompt=prompt,
+            content=content,
+            confidence=96.4,
+            message_type="analysis",
+            suggested_actions=["Migrate workload to GPU-NODE-03", "Throttle GPU clocks", "Dispatch cooling team"],
+        )
+
+    if 'db-master-01' in lower_prompt or 'failure' in lower_prompt or 'probability' in lower_prompt:
+        content = (
+            "## Predictive Risk Assessment: DB-MASTER-01\n\n"
+            "**Diagnosis Confidence: 94.2%**\n\n"
+            "**Failure Probability within 48 Hours: 38.4%**\n\n"
+            "Telemetry indicators for DB-MASTER-01 show critical stress patterns:\n\n"
+            "- **Memory Saturation:** RAM utilization at 85% with connection pool at 94/100 active connections.\n"
+            "- **I/O Latency:** Query execution times elevated by +340ms above normal baseline.\n"
+            "- **Deadlock Rate:** 12 lock contentions logged in past 60 minutes.\n\n"
+            "**Recommended Mitigation Strategy:**\n"
+            "1. Route 40% of read traffic to DB-REPLICA-01 and DB-REPLICA-02.\n"
+            "2. Increase PostgreSQL connection pool size from 100 to 150.\n"
+            "3. Execute query index optimization on `user_telemetry_events` table."
+        )
+        return CopilotQueryResponse(
+            action="query_copilot",
+            message="Failure risk assessment completed.",
+            timestamp=_now(),
+            prompt=prompt,
+            content=content,
+            confidence=94.2,
+            message_type="recommendation",
+            suggested_actions=["Route read queries to replicas", "Expand connection pool"],
+        )
+
+    if 'cost' in lower_prompt or 'optimize' in lower_prompt or 'saving' in lower_prompt:
+        content = (
+            "## Cost Optimization & Resource Efficiency Report\n\n"
+            "**Optimization Confidence: 92.8%**\n\n"
+            "I've identified **$5,040/month** in potential cloud infrastructure savings across your 247 nodes:\n\n"
+            "1. 💡 **Underutilized Compute:** WEB-PROD-03 is running at only 19% average CPU. Consolidating traffic onto WEB-PROD-01/02 allows decommissioning 1 node ($1,240/mo savings).\n"
+            "2. ⚡ **Spot Instance Offloading:** Migrate batch ML inference jobs on GPU-NODE-02 to spot GPU instances ($2,600/mo savings).\n"
+            "3. 📦 **Storage Tiering:** Move 4.2TB of unindexed logs older than 90 days from STORAGE-01 to S3 Glacier ($1,200/mo savings).\n\n"
+            "**Action Plan:** Auto-apply suggested instance tiering during off-peak window (02:00 UTC)."
+        )
+        return CopilotQueryResponse(
+            action="query_copilot",
+            message="Cost optimization plan generated.",
+            timestamp=_now(),
+            prompt=prompt,
+            content=content,
+            confidence=92.8,
+            message_type="recommendation",
+            suggested_actions=["Consolidate WEB-PROD-03", "Enable S3 Glacier lifecycle policy"],
+        )
+
+    if 'restart' in lower_prompt or 'reboot' in lower_prompt:
+        content = (
+            "## Server Restart Prioritization Matrix\n\n"
+            "**Confidence: 98.1%**\n\n"
+            "Based on process memory leaks and connection saturation, here is the safe restart order:\n\n"
+            "1. 🔄 **WEB-PROD-02 (Priority 1):** Node.js heap leak detected (growing +2.3%/hr). Safe for immediate rolling restart after draining connections.\n"
+            "2. 🔄 **DB-REPLICA-02 (Priority 2):** SSD I/O wait elevated (18ms). Perform failover check first, then restart storage controller service.\n"
+            "3. ⚠️ **DO NOT RESTART:** DB-MASTER-01 or GPU-NODE-01 until active workloads are migrated."
+        )
+        return CopilotQueryResponse(
+            action="query_copilot",
+            message="Restart matrix generated.",
+            timestamp=_now(),
+            prompt=prompt,
+            content=content,
+            confidence=98.1,
+            message_type="recommendation",
+            suggested_actions=["Execute rolling restart on WEB-PROD-02"],
+        )
+
+    if 'incident' in lower_prompt or 'summarize' in lower_prompt or 'summary' in lower_prompt:
+        content = (
+            "## Weekly Infrastructure Incident Summary\n\n"
+            "**Report Period: Past 7 Days**\n\n"
+            "- **Total Incidents Logged:** 14 incidents (1 Critical, 4 High, 6 Medium, 3 Low)\n"
+            "- **Auto-Resolved by GuardAI:** 12 incidents (85.7% automation rate)\n"
+            "- **Mean Time to Detection (MTTD):** 1.4 seconds\n"
+            "- **Mean Time to Resolution (MTTR):** 4.2 minutes\n\n"
+            "**Key Incident Highlights:**\n"
+            "- `INC-0847`: GPU-NODE-01 thermal alert (Active)\n"
+            "- `INC-0846`: DB-MASTER-01 memory pressure (Active)\n"
+            "- `INC-0840`: Network partition between US-East-1a and US-West-2a (Auto-recovered)"
+        )
+        return CopilotQueryResponse(
+            action="query_copilot",
+            message="Incident summary compiled.",
+            timestamp=_now(),
+            prompt=prompt,
+            content=content,
+            confidence=97.5,
+            message_type="analysis",
+            suggested_actions=["Download PDF Executive Report"],
+        )
+
+    # Dynamic fallback generator for any other question
+    content = (
+        f"## Telemetry Analysis for: \"{prompt}\"\n\n"
+        "**AI Neural Engine Confidence: 95.1%**\n\n"
+        "I've queried active metrics across all 247 nodes and compiled real-time telemetry:\n\n"
+        "**Current Fleet Status:**\n"
+        "- 🟢 **Healthy Nodes:** 10 nodes (66.7%)\n"
+        "- 🟡 **Warning State:** 4 nodes (26.7% — DB-MASTER-01, DB-REPLICA-02, GPU-NODE-02, STORAGE-01)\n"
+        "- 🔴 **Critical State:** 1 node (6.6% — GPU-NODE-01)\n\n"
+        "**Key Findings & System Health:**\n"
+        "1. Overall infrastructure health index is stable at **97.2/100**.\n"
+        "2. Network throughput across US-East and US-West backbones is **2.4 Gbps** with 0.002% packet loss.\n"
+        "3. System is enforcing auto-remediation protocols for active thermal and memory alerts.\n\n"
+        "Would you like me to execute an automated fix or run deeper diagnostics on a specific cluster?"
+    )
+    return CopilotQueryResponse(
+        action="query_copilot",
+        message="Dynamic query response ready.",
+        timestamp=_now(),
+        prompt=prompt,
+        content=content,
+        confidence=95.1,
+        message_type="recommendation",
+        suggested_actions=["Run AI Scan", "Deploy Infrastructure Patch"],
+    )
+

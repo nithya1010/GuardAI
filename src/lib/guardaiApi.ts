@@ -181,6 +181,57 @@ export async function deleteServer(serverId: string): Promise<GuardAIServerDelet
   return request<GuardAIServerDeleteResponse>(`/servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' })
 }
 
+export interface GuardAIAlertItem {
+  id: string
+  severity: 'critical' | 'high' | 'medium' | 'low'
+  title: string
+  desc: string
+  server: string
+  time: string
+  timestamp: string
+  status: 'active' | 'acknowledged' | 'investigating' | 'monitoring' | 'resolved'
+  ai: string
+  tags: string[]
+}
+
+export interface GuardAICopilotResponse extends GuardAIActionResponse {
+  prompt: string
+  content: string
+  confidence: number
+  message_type: 'analysis' | 'recommendation' | 'alert' | 'normal'
+  suggested_actions?: string[]
+}
+
+export async function fetchAlerts(): Promise<GuardAIAlertItem[]> {
+  return request<GuardAIAlertItem[]>('/alerts')
+}
+
+export async function updateAlertAction(alertId: string, action: 'acknowledge' | 'investigate' | 'autofix' | 'resolve'): Promise<GuardAIAlertItem> {
+  return request<GuardAIAlertItem>(`/alerts/${encodeURIComponent(alertId)}/action`, {
+    method: 'POST',
+    body: JSON.stringify({ action }),
+  })
+}
+
+export async function queryCopilotApi(prompt: string): Promise<GuardAICopilotResponse> {
+  return request<GuardAICopilotResponse>('/copilot/query', {
+    method: 'POST',
+    body: JSON.stringify({ prompt }),
+  })
+}
+
+export function downloadCsv(data: string, fileName: string): void {
+  const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
 export function downloadJson(payload: Record<string, unknown>, fileName: string): void {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
@@ -192,3 +243,4 @@ export function downloadJson(payload: Record<string, unknown>, fileName: string)
   anchor.remove()
   URL.revokeObjectURL(url)
 }
+

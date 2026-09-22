@@ -1,7 +1,17 @@
 import { useState } from 'react'
-import { generateExecutiveReport } from '../lib/guardaiApi'
+import { generateExecutiveReport, downloadCsv } from '../lib/guardaiApi'
 
-const initialReports = [
+interface ReportItem {
+  title: string
+  desc: string
+  period: string
+  type: string
+  status: string
+  highlight: string
+  score: number | null
+}
+
+const initialReports: ReportItem[] = [
   { title: 'Weekly Executive Summary', desc: 'AI-generated infrastructure health report with risk assessment, incident timeline, and optimization recommendations.', period: 'Jul 28 – Aug 3, 2026', type: 'Weekly', status: 'Ready', highlight: '#3B82F6', score: 97.2 },
   { title: 'Monthly Performance Report', desc: 'Comprehensive performance analysis across all clusters, SLA compliance tracking, and capacity utilization trends.', period: 'July 2026', type: 'Monthly', status: 'Ready', highlight: '#A855F7', score: 96.8 },
   { title: 'Incident Post-Mortem: GPU-NODE-01', desc: 'Root cause analysis for thermal event on GPU-NODE-01. Contributing factors, timeline, and prevention measures.', period: 'Aug 4, 2026', type: 'Incident', status: 'Generating', highlight: '#EF4444', score: null },
@@ -9,7 +19,7 @@ const initialReports = [
 ]
 
 export default function Reports() {
-  const [reports, setReports] = useState(initialReports)
+  const [reports, setReports] = useState<ReportItem[]>(initialReports)
   const [isGenerating, setIsGenerating] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
@@ -46,6 +56,93 @@ export default function Reports() {
     } finally {
       setIsGenerating(false)
     }
+  }
+
+  const handleExportCsv = (r: ReportItem) => {
+    const csvLines = [
+      'Title,Type,Period,Status,Health Score,Description',
+      `"${r.title.replace(/"/g, '""')}","${r.type}","${r.period}","${r.status}","${r.score ?? 'N/A'}","${r.desc.replace(/"/g, '""')}"`,
+      '',
+      'Metric,Value,Unit',
+      ...metrics.map(m => `"${m.label}","${m.value}","${m.unit}"`),
+      '',
+      'AI Executive Summary Section,Text',
+      '"Achievements","Zero unplanned downtime. 97.2% health score maintained. 23 incidents auto-resolved."',
+      '"Key Risks","GPU thermal management, storage capacity growth, database query optimization needed."',
+      '"Recommendations","Scale GPU cluster, expand storage, implement DB read replicas, upgrade cooling system."',
+    ]
+    const safeTitle = r.title.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase()
+    downloadCsv(csvLines.join('\n'), `guardai_report_${safeTitle}.csv`)
+    setStatusMessage(`Exported CSV for "${r.title}".`)
+  }
+
+  const handleExportPdf = (r: ReportItem) => {
+    const printWindow = window.open('', '_blank')
+    if (!printWindow) {
+      setStatusMessage('Pop-up blocked. Please allow pop-ups to view printable PDF report.')
+      return
+    }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>GuardAI Report - ${r.title}</title>
+        <style>
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 40px; color: #1e293b; background: #fff; }
+          .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
+          .title { font-size: 24px; font-weight: bold; color: #0f172a; }
+          .subtitle { color: #64748b; font-size: 14px; margin-top: 4px; }
+          .badge { display: inline-block; padding: 4px 12px; border-radius: 999px; background: #e0f2fe; color: #0284c7; font-weight: 600; font-size: 12px; }
+          .score-card { font-size: 36px; font-weight: 800; color: #10b981; margin-top: 10px; }
+          .section { margin-bottom: 24px; }
+          .section-title { font-size: 16px; font-weight: 700; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; margin-bottom: 12px; color: #334155; }
+          .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; }
+          .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <div>
+            <div class="title">🛡️ GuardAI Operations Center</div>
+            <div class="subtitle">${r.title} — ${r.period}</div>
+          </div>
+          <div>
+            <span class="badge">${r.type} Report</span>
+            ${r.score ? `<div class="score-card">${r.score}/100</div>` : ''}
+          </div>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Executive Summary</div>
+          <p style="font-size: 14px; line-height: 1.6; color: #334155;">${r.desc}</p>
+        </div>
+
+        <div class="section">
+          <div class="section-title">Key Operational Highlights</div>
+          <div class="grid">
+            <div class="card">
+              <strong style="color: #16a34a;">✅ Achievements</strong>
+              <p style="font-size: 12px; color: #475569; margin-top: 6px;">Zero unplanned downtime. 97.2% health score maintained. 23 incidents auto-resolved by GuardAI engine.</p>
+            </div>
+            <div class="card">
+              <strong style="color: #d97706;">⚠️ Key Risks</strong>
+              <p style="font-size: 12px; color: #475569; margin-top: 6px;">GPU thermal management on GPU-NODE-01, storage capacity growth on STORAGE-01, database query optimization required.</p>
+            </div>
+            <div class="card">
+              <strong style="color: #2563eb;">🎯 Strategic Recommendations</strong>
+              <p style="font-size: 12px; color: #475569; margin-top: 6px;">Scale GPU cluster horizontally, expand storage volume, implement DB read replicas, upgrade cooling system in Rack Zone C.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+    printWindow.focus()
+    setTimeout(() => {
+      printWindow.print()
+    }, 500)
+    setStatusMessage(`PDF report window opened for "${r.title}".`)
   }
 
   return (
@@ -111,8 +208,20 @@ export default function Reports() {
                 )}
                 {r.status === 'Ready' && (
                   <div style={{ display: 'flex', gap: 6 }}>
-                    <button className="btn-secondary" style={{ padding: '7px 12px', fontSize: 12 }}>📊 CSV</button>
-                    <button className="btn-primary" style={{ padding: '7px 12px', fontSize: 12 }}>📄 PDF</button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => handleExportCsv(r)}
+                      style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer' }}
+                    >
+                      📊 CSV
+                    </button>
+                    <button
+                      className="btn-primary"
+                      onClick={() => handleExportPdf(r)}
+                      style={{ padding: '7px 12px', fontSize: 12, cursor: 'pointer' }}
+                    >
+                      📄 PDF
+                    </button>
                   </div>
                 )}
               </div>
@@ -142,3 +251,4 @@ export default function Reports() {
     </div>
   )
 }
+

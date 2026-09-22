@@ -149,3 +149,42 @@ class ServerDeleteResponse(ActionMessage):
     server_id: str
     removed: bool = True
 
+
+class AlertItem(BaseModel):
+    """An infrastructure alert or incident item."""
+
+    id: str
+    severity: Literal["critical", "high", "medium", "low"]
+    title: str
+    desc: str
+    server: str
+    time: str
+    timestamp: str
+    status: Literal["active", "acknowledged", "investigating", "monitoring", "resolved"]
+    ai: str
+    tags: list[str]
+
+
+class AlertActionRequest(BaseModel):
+    """Payload for updating alert status."""
+
+    action: Literal["acknowledge", "investigate", "autofix", "resolve"]
+
+
+class CopilotQueryRequest(BaseModel):
+    """Payload for querying AI Copilot."""
+
+    prompt: str
+    context_node: str | None = None
+
+
+class CopilotQueryResponse(ActionMessage):
+    """Response returned by AI Copilot engine."""
+
+    prompt: str
+    content: str
+    confidence: float
+    message_type: Literal["analysis", "recommendation", "alert", "normal"] = "analysis"
+    suggested_actions: list[str] = Field(default_factory=list)
+
+
